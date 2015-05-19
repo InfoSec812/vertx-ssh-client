@@ -76,38 +76,16 @@ public interface SSHSocket extends ReadStream<Buffer>, WriteStream<Buffer> {
    */
   @Fluent
   SSHSocket write(String str, String enc);
-
-  /**
-   * Tell the operating system to stream a file as specified by {@code filename} directly from disk to the outgoing connection,
-   * bypassing userspace altogether (where supported by the underlying operating system. This is a very efficient way to stream files.
-   *
-   * @param filename  file name of the file to send
-   * @return a reference to this, so the API can be used fluently
-   */
-  @Fluent
-  SSHSocket sendFile(String filename);
-
-  /**
-   * Same as {@link #sendFile(String)} but also takes a handler that will be called when the send has completed or
-   * a failure has occurred
-   *
-   * @param filename  file name of the file to send
-   * @param resultHandler  handler
-   * @return a reference to this, so the API can be used fluently
-   */
-  @Fluent
-  SSHSocket sendFile(String filename, Handler<AsyncResult<Void>> resultHandler);
   
   /**
-   * Same as {@link #sendFile(java.lang.String, io.vertx.core.Handler)}, but also takes a {@link Buffer}
-   * which contains the data to be written to the target filename.
+   * Write the provided {@link Buffer} to the specified filename on the SSH server
    * @param filename  file name of the file to send
    * @param resultHandler  handler
    * @param fileData A Buffer which contains the data to be written to the target file.
    * @return a reference to this, so the API can be used fluently
    */
   @Fluent
-  SSHSocket sendFile(String filename, Buffer fileData, Handler<AsyncResult<Void>> resultHandler);
+  SSHSocket writeFile(String filename, Buffer fileData, Handler<AsyncResult<Void>> resultHandler);
   
   /**
    * Retrieve a file from the remote SSH server using the SCP channel asynchronously. The handler will be
@@ -118,7 +96,7 @@ public interface SSHSocket extends ReadStream<Buffer>, WriteStream<Buffer> {
    * @return a reference to this {@link SSHSocket} so that this API can be used fluently.
    */
   @Fluent
-  SSHSocket getFile(String filename, Handler<AsyncResult<Buffer>> resultHandler);
+  SSHSocket readFile(String filename, Handler<AsyncResult<Buffer>> resultHandler);
 
   /**
    * Close the NetSocket

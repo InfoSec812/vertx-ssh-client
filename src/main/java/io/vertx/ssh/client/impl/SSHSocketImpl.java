@@ -1,6 +1,7 @@
 package io.vertx.ssh.client.impl;
 
 import com.jcraft.jsch.Channel;
+import com.jcraft.jsch.ChannelExec;
 import com.jcraft.jsch.JSch;
 import com.jcraft.jsch.JSchException;
 import com.jcraft.jsch.Session;
@@ -13,9 +14,11 @@ import io.vertx.core.eventbus.MessageConsumer;
 import io.vertx.ssh.client.ReadableOutputStream;
 import io.vertx.ssh.client.SSHSocket;
 import io.vertx.ssh.client.WriteableInputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.util.UUID;
 import org.mvel2.util.ThisLiteral;
-
 
 public class SSHSocketImpl implements SSHSocket {
 
@@ -37,7 +40,7 @@ public class SSHSocketImpl implements SSHSocket {
     super();
     this.vertx = vertx;
     jsch = new JSch();
-    if (key!=null) {
+    if (key != null) {
       jsch.addIdentity(key);
       session = jsch.getSession(user, host, port);
     } else {
@@ -121,22 +124,77 @@ public class SSHSocketImpl implements SSHSocket {
   }
 
   @Override
-  public SSHSocket sendFile(String filename) {
-    throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
+  public SSHSocket writeFile(final String filename, final Buffer fileData, final Handler<AsyncResult<Void>> resultHandler) {
+    vertx.executeBlocking(future -> {
+      try {
+        final String scpCmd = "scp -f " + filename;
+        Channel fileChannel = session.openChannel("exec");
+
+        ((ChannelExec) fileChannel).setCommand(scpCmd);
+        OutputStream fileOut = fileChannel.getOutputStream();
+        InputStream fileIn = fileChannel.getExtInputStream();
+
+        fileChannel.connect();
+
+        int response = checkAck(fileIn);
+        if (response != 0) {
+          throw new IOException("Failed to execute remote SCP command: "+response);
+        }
+        
+        fileOut.write("C0644 ".getBytes());
+        fileOut.write((fileData.length()+"").getBytes());
+        fileOut.write(" ".getBytes());
+        fileOut.write(fileData.getBytes());
+        fileOut.write(0,0,1);
+        fileOut.flush();
+        
+        response = checkAck(fileIn);
+        if (response!=0) {
+          throw new IOException("Unable to write file data: "+response);
+        }
+        
+        fileOut.close();
+        fileChannel.disconnect();
+        future.complete();
+      } catch (JSchException | IOException e) {
+        future.fail(e);
+      }
+    }, resultHandler);
+    return this;
+  }
+
+  private static int checkAck(InputStream in) throws IOException {
+    int b = in.read();
+    // b may be 0 for success,
+    //          1 for error,
+    //          2 for fatal error,
+    //          -1
+    if (b == 0) {
+      return b;
+    }
+    if (b == -1) {
+      return b;
+    }
+
+    if (b == 1 || b == 2) {
+      StringBuffer sb = new StringBuffer();
+      int c;
+      do {
+        c = in.read();
+        sb.append((char) c);
+      } while (c != '\n');
+      if (b == 1) { // error
+        System.out.print(sb.toString());
+      }
+      if (b == 2) { // fatal error
+        System.out.print(sb.toString());
+      }
+    }
+    return b;
   }
 
   @Override
-  public SSHSocket sendFile(String filename, Handler<AsyncResult<Void>> resultHandler) {
-    throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
-  }
-
-  @Override
-  public SSHSocket sendFile(String filename, Buffer fileData, Handler<AsyncResult<Void>> resultHandler) {
-    throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
-  }
-
-  @Override
-  public SSHSocket getFile(String filename, Handler<AsyncResult<Buffer>> resultHandler) {
+  public SSHSocket readFile(String filename, Handler<AsyncResult<Buffer>> resultHandler) {
     throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
   }
 
