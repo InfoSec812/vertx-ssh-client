@@ -1,0 +1,4 @@
+= Vert.x SSH Client
+
+A Vert.x module for creating an Async wrapper around JSch for performing SSH operations against an SSH server. It is
+designed to work similar to the Vert.x Core's NetSocket with some additional items which are specific to SSH.
