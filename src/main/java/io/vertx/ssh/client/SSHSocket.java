@@ -99,6 +99,17 @@ public interface SSHSocket extends ReadStream<Buffer>, WriteStream<Buffer> {
   SSHSocket sendFile(String filename, Handler<AsyncResult<Void>> resultHandler);
   
   /**
+   * Same as {@link #sendFile(java.lang.String, io.vertx.core.Handler)}, but also takes a {@link Buffer}
+   * which contains the data to be written to the target filename.
+   * @param filename  file name of the file to send
+   * @param resultHandler  handler
+   * @param fileData A Buffer which contains the data to be written to the target file.
+   * @return a reference to this, so the API can be used fluently
+   */
+  @Fluent
+  SSHSocket sendFile(String filename, Buffer fileData, Handler<AsyncResult<Void>> resultHandler);
+  
+  /**
    * Retrieve a file from the remote SSH server using the SCP channel asynchronously. The handler will be
    * called as data from the file is read asynchronously.
    * @param filename The full path and filename of the file to be retrieved from the remote host

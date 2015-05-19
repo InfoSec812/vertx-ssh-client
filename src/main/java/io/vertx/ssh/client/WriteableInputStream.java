@@ -1,6 +1,5 @@
 package io.vertx.ssh.client;
 
-import com.hazelcast.map.impl.eviction.MaxSizeChecker;
 import io.vertx.core.Handler;
 import io.vertx.core.Vertx;
 import io.vertx.core.buffer.Buffer;
