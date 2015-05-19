@@ -11,6 +11,9 @@ import io.vertx.core.Vertx;
 import io.vertx.core.buffer.Buffer;
 import io.vertx.core.eventbus.Message;
 import io.vertx.core.eventbus.MessageConsumer;
+import io.vertx.core.logging.Logger;
+import io.vertx.core.logging.impl.Log4jLogDelegateFactory;
+import io.vertx.core.logging.impl.LoggerFactory;
 import io.vertx.ssh.client.ReadableOutputStream;
 import io.vertx.ssh.client.SSHSocket;
 import io.vertx.ssh.client.WriteableInputStream;
@@ -22,8 +25,10 @@ import org.mvel2.util.ThisLiteral;
 
 public class SSHSocketImpl implements SSHSocket {
 
+  private static final byte[] NULL = {0};
+
   private Handler<Throwable> exHandler;
-  private Handler<Buffer> handler;
+  private Handler<Buffer> dataHandler;
   private Handler<Void> endHandler;
   private Handler<Void> drainHandler;
   private final ReadableOutputStream inFromSSH;
@@ -65,7 +70,7 @@ public class SSHSocketImpl implements SSHSocket {
 
   @Override
   public SSHSocket handler(Handler<Buffer> handler) {
-    this.handler = handler;
+    this.dataHandler = handler;
     return this;
   }
 
@@ -86,6 +91,7 @@ public class SSHSocketImpl implements SSHSocket {
   @Override
   public SSHSocket endHandler(Handler<Void> endHandler) {
     this.endHandler = endHandler;
+    return this;
   }
 
   @Override
@@ -138,22 +144,23 @@ public class SSHSocketImpl implements SSHSocket {
 
         int response = checkAck(fileIn);
         if (response != 0) {
-          throw new IOException("Failed to execute remote SCP command: "+response);
+          throw new IOException("Failed to execute remote SCP command: " + response);
         }
-        
+
         fileOut.write("C0644 ".getBytes());
-        fileOut.write((fileData.length()+"").getBytes());
+        fileOut.write((fileData.length() + "").getBytes());
         fileOut.write(" ".getBytes());
         fileOut.write(fileData.getBytes());
-        fileOut.write(0,0,1);
+        fileOut.write(NULL, 0, 1);
         fileOut.flush();
-        
+
         response = checkAck(fileIn);
-        if (response!=0) {
-          throw new IOException("Unable to write file data: "+response);
+        if (response != 0) {
+          throw new IOException("Unable to write file data: " + response);
         }
-        
+
         fileOut.close();
+        fileIn.close();
         fileChannel.disconnect();
         future.complete();
       } catch (JSchException | IOException e) {
@@ -194,8 +201,69 @@ public class SSHSocketImpl implements SSHSocket {
   }
 
   @Override
-  public SSHSocket readFile(String filename, Handler<AsyncResult<Buffer>> resultHandler) {
-    throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
+  public SSHSocket readFile(final String filename, final Handler<Buffer> resultHandler) {
+    vertx.executeBlocking(future -> {
+      try {
+        final String scpCmd = "scp -f " + filename;
+        Channel fileChannel = session.openChannel("exec");
+        ((ChannelExec) fileChannel).setCommand(scpCmd);
+
+        OutputStream fileOut = fileChannel.getOutputStream();
+        InputStream fileIn = fileChannel.getInputStream();
+
+        fileChannel.connect();
+
+        fileOut.write(NULL, 0, 1);
+        fileOut.flush();
+
+        while (true) {
+          int c = checkAck(fileIn);
+          if (c != 'C') {
+            break;
+          }
+
+          byte[] buf = new byte[1024];
+          fileIn.read(buf, 0, 5);
+
+          long filesize = 0L;
+          while (true) {
+            if (fileIn.read(buf, 0, 1) < 0) {
+              // error
+              break;
+            }
+            if (buf[0] == ' ') {
+              break;
+            }
+            filesize = filesize * 10L + (long) (buf[0] - '0');
+          }
+
+          String file = null;
+          while (true) {
+            int readLen = fileIn.read(buf);
+            resultHandler.handle(Buffer.buffer(buf));
+            if (buf[readLen-1] == (byte) 0x0a) {
+              break;
+            }
+          }
+
+          //System.out.println("filesize="+filesize+", file="+file);
+          // send '\0'
+          fileOut.write(NULL, 0, 1);
+          fileOut.flush();
+          fileOut.close();
+          fileIn.close();
+          fileChannel.disconnect();
+          future.complete();
+        }
+      } catch (JSchException | IOException e) {
+        future.fail(e);
+      }
+    }, res -> {
+      if (res.failed()) {
+        LoggerFactory.getLogger(this.getClass()).error(res.cause().getLocalizedMessage(), res.cause().getCause());
+      }
+    });
+    return this;
   }
 
   @Override

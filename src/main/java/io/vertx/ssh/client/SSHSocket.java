@@ -96,7 +96,7 @@ public interface SSHSocket extends ReadStream<Buffer>, WriteStream<Buffer> {
    * @return a reference to this {@link SSHSocket} so that this API can be used fluently.
    */
   @Fluent
-  SSHSocket readFile(String filename, Handler<AsyncResult<Buffer>> resultHandler);
+  SSHSocket readFile(String filename, Handler<Buffer> resultHandler);
 
   /**
    * Close the NetSocket
